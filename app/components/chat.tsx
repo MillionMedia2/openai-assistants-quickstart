@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import styles from "./chat.module.css";
 import { AssistantStream } from "openai/lib/AssistantStream";
 import Markdown from "react-markdown";
@@ -67,7 +67,6 @@ const Chat = ({
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [systemPromptError, setSystemPromptError] = useState<string | null>(null);
   const [isLoadingSystemPrompt, setIsLoadingSystemPrompt] = useState(true); // New loading state
-  const [isAwaitingResponse, setIsAwaitingResponse] = useState(false); // Track AI response time
 
   // automatically scroll to bottom of chat
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -181,7 +180,7 @@ const Chat = ({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!userInput.trim()) return;
-    setIsAwaitingResponse(true); // Show loading indicator
+    //setIsAwaitingResponse(true); // Show loading indicator
     setInputDisabled(true);    // Disable input
     sendMessage(userInput);
     setMessages((prevMessages) => [
@@ -246,7 +245,7 @@ const Chat = ({
 
   // handleRunCompleted - re-enable the input form
   const handleRunCompleted = () => {
-    setIsAwaitingResponse(false); // Hide loading indicator
+    //setIsAwaitingResponse(false); // Hide loading indicator
     setInputDisabled(false);   // Enable input
   };
 
@@ -266,7 +265,10 @@ const Chat = ({
     stream.on("event", (event) => {
       if (event.event === "thread.run.requires_action")
         handleRequiresAction(event);
-      if (event.event === "thread.run.completed") handleRunCompleted();
+      if (event.event === "thread.run.completed") {  // This is the change
+        //console.log("thread.run.completed event:", event); // This is the change
+        handleRunCompleted();
+      }
     });
   };
 
@@ -312,7 +314,7 @@ const Chat = ({
 
   return (
     <div className={styles.chatContainer}>
-      {(isLoadingSystemPrompt || isAwaitingResponse) && (
+      {isLoadingSystemPrompt && (
         <div className={styles.loadingMessage}>Loading...</div>
       )}
       {systemPromptError && (
@@ -340,7 +342,7 @@ const Chat = ({
         <button
           type="submit"
           className={styles.button}
-          disabled={inputDisabled || isAwaitingResponse}
+          disabled={inputDisabled}
         >
           Send
         </button>
