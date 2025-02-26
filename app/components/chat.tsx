@@ -61,7 +61,10 @@ const Chat = ({
   functionCallHandler = () => Promise.resolve(""), // default to return empty string
 }: ChatProps) => {
   const [userInput, setUserInput] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([{
+          role: "assistant",
+          text: "I am a Plantz Agent who can talk about medical cannabis, clinics and prescriptions. How can I help you?",
+        }]);
   const [inputDisabled, setInputDisabled] = useState(false);
   const [threadId, setThreadId] = useState("");
   const [lastActivity, setLastActivity] = useState(Date.now());  // Track last stream activity
@@ -87,20 +90,7 @@ const Chat = ({
           throw new Error(`Failed to create thread: ${res.status}`);
         }
         const data = await res.json();
-        const newThreadId = data.threadId;
-
-        // Send initial assistant message
-        try {
-          await fetch(`/api/assistants/threads/${newThreadId}/messages`, {
-            method: "POST",
-            body: JSON.stringify({
-              content: "I am an Agent who can talk about medical cannabis, clinics and prescriptions. How can I help you?",
-            }),
-          });
-          setThreadId(newThreadId);
-        } catch (error) {
-          console.error("Error sending initial message:", error);
-        }
+        setThreadId(data.threadId);
       } catch (error: any) {
         console.error("Error creating thread:", error);
       }
@@ -221,7 +211,7 @@ const Chat = ({
     setInputDisabled(false);
   };
 
-  const handleReadableStream = (stream: AssistantStream) => {
+   const handleReadableStream = (stream: AssistantStream) => {
     try {
       let streamActive = true; // Track if the stream is considered active
       const resetInactivityTimeout = () => {
@@ -236,10 +226,12 @@ const Chat = ({
         }
       };
       const heartbeatIntervalId = setInterval(inactivityCheck, HEARTBEAT_INTERVAL);
+
+      // messages
       stream.on("textCreated", (event) => {
         try {
           handleTextCreated();
-            resetInactivityTimeout()
+          resetInactivityTimeout();
         } catch (error) {
           console.error("Error in handleTextCreated:", error);
           streamActive = false;
@@ -248,7 +240,7 @@ const Chat = ({
       stream.on("textDelta", (event) => {
         try {
           handleTextDelta(event);
-            resetInactivityTimeout()
+          resetInactivityTimeout();
         } catch (error) {
           console.error("Error in handleTextDelta:", error);
           streamActive = false;
@@ -257,7 +249,7 @@ const Chat = ({
       stream.on("imageFileDone", (event) => {
         try {
           handleImageFileDone(event);
-            resetInactivityTimeout()
+          resetInactivityTimeout();
         } catch (error) {
           console.error("Error in handleImageFileDone:", error);
           streamActive = false;
@@ -272,9 +264,9 @@ const Chat = ({
           }
           if (event.event === "thread.run.completed") {
             handleRunCompleted();
-            clearInterval(heartbeatIntervalId)
+            clearInterval(heartbeatIntervalId);
           }
-            resetInactivityTimeout()
+          resetInactivityTimeout();
         } catch (error) {
           console.error("Error in event handler:", error);
           streamActive = false;
