@@ -62,11 +62,8 @@ const Chat = ({
 }: ChatProps) => {
   const [userInput, setUserInput] = useState("");
   const [messages, setMessages] = useState([]);
-  const [inputDisabled, setInputDisabled] = useState(true); // Initially disabled until system prompt loads
+  const [inputDisabled, setInputDisabled] = useState(false);
   const [threadId, setThreadId] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
-  const [systemPromptError, setSystemPromptError] = useState<string | null>(null);
-  const [isLoadingSystemPrompt, setIsLoadingSystemPrompt] = useState(true); // New loading state
 
   // automatically scroll to bottom of chat
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -77,81 +74,25 @@ const Chat = ({
     scrollToBottom();
   }, [messages]);
 
-  // Load system prompt
-  useEffect(() => {
-    const loadSystemPrompt = async () => {
-      setIsLoadingSystemPrompt(true); // Start loading
-      try {
-        const res = await fetch("/api/system-prompt");
-        if (!res.ok) {
-          throw new Error(`Failed to load system prompt: ${res.status}`);
-        }
-        const prompt = await res.text();
-        setSystemPrompt(prompt);
-        // Slight delay before enabling input to avoid flickering
-        setTimeout(() => {
-          setInputDisabled(false);
-          setIsLoadingSystemPrompt(false); // Stop loading after delay
-        }, 200);
-      } catch (error: any) {
-        console.error("Error loading system prompt:", error);
-        setSystemPromptError(error.message || "Failed to load system prompt");
-        setIsLoadingSystemPrompt(false); // Stop loading on error
-      }
-    };
-
-    loadSystemPrompt();
-  }, []);
-
   // create a new threadID when chat component created
   useEffect(() => {
     const createThread = async () => {
-      if (!systemPrompt) {
-        return; // Don't create thread until system prompt is loaded
-      }
-
-      try {
-        const res = await fetch(`/api/assistants/threads`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json", // Add header for JSON body
-          },
-          body: JSON.stringify({
-            instructions: systemPrompt, // Include system prompt as instructions
-          }),
-        });
-
-        if (!res.ok) {
-          throw new Error(`Failed to create thread: ${res.status}`);
-        }
-
-        const data = await res.json();
-        setThreadId(data.threadId);
-      } catch (error: any) {
-        console.error("Error creating thread:", error);
-        // Consider displaying an error message to the user
-      }
+      const res = await fetch(`/api/assistants/threads`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      setThreadId(data.threadId);
     };
-
     createThread();
-  }, [systemPrompt]); // Re-run when systemPrompt changes
+  }, []);
 
   const sendMessage = async (text) => {
-    if (!systemPrompt) {
-      return; // Don't send message until system prompt is loaded
-    }
-
-    const messageContent = `${systemPrompt}\n${text}`;
-
     const response = await fetch(
       `/api/assistants/threads/${threadId}/messages`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
-          content: messageContent,
+          content: text,
         }),
       }
     );
@@ -180,14 +121,13 @@ const Chat = ({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!userInput.trim()) return;
-    //setIsAwaitingResponse(true); // Show loading indicator
-    setInputDisabled(true);    // Disable input
     sendMessage(userInput);
     setMessages((prevMessages) => [
       ...prevMessages,
       { role: "user", text: userInput },
     ]);
     setUserInput("");
+    setInputDisabled(true);
     scrollToBottom();
   };
 
@@ -245,8 +185,7 @@ const Chat = ({
 
   // handleRunCompleted - re-enable the input form
   const handleRunCompleted = () => {
-    //setIsAwaitingResponse(false); // Hide loading indicator
-    setInputDisabled(false);   // Enable input
+    setInputDisabled(false);
   };
 
   const handleReadableStream = (stream: AssistantStream) => {
@@ -265,10 +204,7 @@ const Chat = ({
     stream.on("event", (event) => {
       if (event.event === "thread.run.requires_action")
         handleRequiresAction(event);
-      if (event.event === "thread.run.completed") {  // This is the change
-        //console.log("thread.run.completed event:", event); // This is the change
-        handleRunCompleted();
-      }
+      if (event.event === "thread.run.completed") handleRunCompleted();
     });
   };
 
@@ -309,19 +245,11 @@ const Chat = ({
       })
       return [...prevMessages.slice(0, -1), updatedLastMessage];
     });
-
+    
   }
 
   return (
     <div className={styles.chatContainer}>
-      {isLoadingSystemPrompt && (
-        <div className={styles.loadingMessage}>Loading...</div>
-      )}
-      {systemPromptError && (
-        <div className={styles.errorMessage}>
-          Error loading system prompt: {systemPromptError}
-        </div>
-      )}
       <div className={styles.messages}>
         {messages.map((msg, index) => (
           <Message key={index} role={msg.role} text={msg.text} />
