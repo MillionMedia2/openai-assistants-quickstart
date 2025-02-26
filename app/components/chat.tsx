@@ -4,8 +4,6 @@ import React, { useState, useEffect, useRef } from "react";
 import styles from "./chat.module.css";
 import { AssistantStream } from "openai/lib/AssistantStream";
 import Markdown from "react-markdown";
-// @ts-expect-error - no types for this yet
-import { AssistantStreamEvent } from "openai/resources/beta/assistants/assistants";
 import { RequiredActionFunctionToolCall } from "openai/resources/beta/threads/runs/runs";
 
 type MessageProps = {
@@ -61,13 +59,15 @@ const Chat = ({
   functionCallHandler = () => Promise.resolve(""), // default to return empty string
 }: ChatProps) => {
   const [userInput, setUserInput] = useState("");
-  const [messages, setMessages] = useState([{
-          role: "assistant",
-          text: "I am a Plantz Agent who can talk about medical cannabis, clinics and prescriptions. How can I help you?",
-        }]);
+  const [messages, setMessages] = useState<MessageProps[]>([
+    {
+      role: "assistant",
+      text: "I am a Plantz Agent who can talk about medical cannabis, clinics and prescriptions. How can I help you?",
+    },
+  ]);
   const [inputDisabled, setInputDisabled] = useState(false);
   const [threadId, setThreadId] = useState("");
-  const [lastActivity, setLastActivity] = useState(Date.now());  // Track last stream activity
+  const [lastActivity, setLastActivity] = useState(Date.now()); // Track last stream activity
   const HEARTBEAT_INTERVAL = 5000; // 5 seconds
 
   // automatically scroll to bottom of chat
@@ -183,15 +183,9 @@ const Chat = ({
     }
   };
 
-  // imageFileDone - show image in chat
-  const handleImageFileDone = (image) => {
-    appendToLastMessage(`\n![${image.file_id}](/api/files/${image.file_path.file_id})\n`);
-    setLastActivity(Date.now());
-  }
-
   // handleRequiresAction - handle function call
   const handleRequiresAction = async (
-    event: AssistantStreamEvent.ThreadRunRequiresAction
+    event: any //ASSISTANTSTREAMEVENT.THREADRUNREQUIRESACTION
   ) => {
     const runId = event.data.id;
     const toolCalls = event.data.required_action.submit_tool_outputs.tool_calls;
@@ -246,17 +240,7 @@ const Chat = ({
           streamActive = false;
         }
       });
-      stream.on("imageFileDone", (event) => {
-        try {
-          handleImageFileDone(event);
-          resetInactivityTimeout();
-        } catch (error) {
-          console.error("Error in handleImageFileDone:", error);
-          streamActive = false;
-        }
-      });
 
-      // events without helpers yet (e.g. requires_action and run.done)
       stream.on("event", (event) => {
         try {
           if (event.event === "thread.run.requires_action") {
