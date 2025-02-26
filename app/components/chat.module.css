@@ -94,3 +94,19 @@
   color: #b8b8b8;
   margin-right: 8px;
 }
+
+@media (max-width: 600px) {
+  .inputForm {
+    flex-direction: column; /* Stack input and button vertically */
+    align-items: stretch; /* Make items stretch to fill the width */
+  }
+
+  .input {
+    margin-right: 0; /* Remove right margin on mobile */
+    margin-bottom: 10px; /* Add bottom margin for spacing */
+  }
+
+  .button {
+    width: 100%; /* Make the button fill the width */
+  }
+}

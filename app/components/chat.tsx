@@ -79,6 +79,13 @@ const Chat = ({
     scrollToBottom();
   }, [messages]);
 
+  const scrollToTop = () => {
+    window.scrollTo(0, 0);
+  };
+  useEffect(() => {
+    scrollToTop();
+  }, [messages]);
+
   // create a new threadID when chat component created
   useEffect(() => {
     const createThread = async () => {
@@ -185,7 +192,7 @@ const Chat = ({
 
   // handleRequiresAction - handle function call
   const handleRequiresAction = async (
-    event: any //ASSISTANTSTREAMEVENT.THREADRUNREQUIRESACTION
+    event: any
   ) => {
     const runId = event.data.id;
     const toolCalls = event.data.required_action.submit_tool_outputs.tool_calls;
@@ -241,6 +248,7 @@ const Chat = ({
         }
       });
 
+      // events without helpers yet (e.g. requires_action and run.done)
       stream.on("event", (event) => {
         try {
           if (event.event === "thread.run.requires_action") {
@@ -295,13 +303,15 @@ const Chat = ({
     setMessages((prevMessages) => [...prevMessages, { role, text }]);
   };
 
-  const annotateLastMessage = (annotations) => {
+  const annotateLastMessage = (delta) => {
     setMessages((prevMessages) => {
       const lastMessage = prevMessages[prevMessages.length - 1];
       const updatedLastMessage = {
         ...lastMessage,
+        text: lastMessage.text + delta.value,
       };
-      annotations.forEach((annotation) => {
+      if (delta.annotations) {
+           delta.annotations.forEach((annotation) => {
         if (annotation.type === 'file_path') {
           updatedLastMessage.text = updatedLastMessage.text.replaceAll(
             annotation.text,
@@ -309,6 +319,8 @@ const Chat = ({
           );
         }
       })
+      }
+    
       return [...prevMessages.slice(0, -1), updatedLastMessage];
     });
   };
