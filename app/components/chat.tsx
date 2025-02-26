@@ -77,45 +77,62 @@ const Chat = ({
   // create a new threadID when chat component created
   useEffect(() => {
     const createThread = async () => {
-      const res = await fetch(`/api/assistants/threads`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      setThreadId(data.threadId);
+      try {
+        const res = await fetch(`/api/assistants/threads`, {
+          method: "POST",
+        });
+        if (!res.ok) {
+          throw new Error(`Failed to create thread: ${res.status}`);
+        }
+        const data = await res.json();
+        setThreadId(data.threadId);
+      } catch (error: any) {
+        console.error("Error creating thread:", error);
+      }
     };
     createThread();
   }, []);
 
   const sendMessage = async (text) => {
-    const response = await fetch(
-      `/api/assistants/threads/${threadId}/messages`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          content: text,
-        }),
-      }
-    );
-    const stream = AssistantStream.fromReadableStream(response.body);
-    handleReadableStream(stream);
+    try {
+      const response = await fetch(
+        `/api/assistants/threads/${threadId}/messages`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content: text,
+          }),
+        }
+      );
+      const stream = AssistantStream.fromReadableStream(response.body);
+      handleReadableStream(stream);
+    } catch (error: any) {
+      console.error("Error sending message:", error);
+      setInputDisabled(false);
+    }
   };
 
   const submitActionResult = async (runId, toolCallOutputs) => {
-    const response = await fetch(
-      `/api/assistants/threads/${threadId}/actions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          runId: runId,
-          toolCallOutputs: toolCallOutputs,
-        }),
-      }
-    );
-    const stream = AssistantStream.fromReadableStream(response.body);
-    handleReadableStream(stream);
+    try {
+      const response = await fetch(
+        `/api/assistants/threads/${threadId}/actions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            runId: runId,
+            toolCallOutputs: toolCallOutputs,
+          }),
+        }
+      );
+      const stream = AssistantStream.fromReadableStream(response.body);
+      handleReadableStream(stream);
+    } catch (error: any) {
+      console.error("Error submitting action result:", error);
+      setInputDisabled(false);
+    }
   };
 
   const handleSubmit = (e) => {
@@ -142,7 +159,7 @@ const Chat = ({
   const handleTextDelta = (delta) => {
     if (delta.value != null) {
       appendToLastMessage(delta.value);
-    };
+    }
     if (delta.annotations != null) {
       annotateLastMessage(delta.annotations);
     }
@@ -151,7 +168,7 @@ const Chat = ({
   // imageFileDone - show image in chat
   const handleImageFileDone = (image) => {
     appendToLastMessage(`\n![${image.file_id}](/api/files/${image.file_id})\n`);
-  }
+  };
 
   // toolCallCreated - log new tool call
   const toolCallCreated = (toolCall) => {
@@ -189,23 +206,73 @@ const Chat = ({
   };
 
   const handleReadableStream = (stream: AssistantStream) => {
-    // messages
-    stream.on("textCreated", handleTextCreated);
-    stream.on("textDelta", handleTextDelta);
+    try {
+      // messages
+      stream.on("textCreated", (event) => {
+        try {
+          handleTextCreated();
+        } catch (error) {
+          console.error("Error in handleTextCreated:", error);
+        }
+      });
+      stream.on("textDelta", (event) => {
+        try {
+          handleTextDelta(event);
+        } catch (error) {
+          console.error("Error in handleTextDelta:", error);
+        }
+      });
+      stream.on("imageFileDone", (event) => {
+        try {
+          handleImageFileDone(event);
+        } catch (error) {
+          console.error("Error in handleImageFileDone:", error);
+        }
+      });
+      stream.on("toolCallCreated", (event) => {
+        try {
+          toolCallCreated(event);
+        } catch (error) {
+          console.error("Error in toolCallCreated:", error);
+        }
+      });
+      stream.on("toolCallDelta", (event) => {
+        try {
+          toolCallDelta(event);
+        } catch (error) {
+          console.error("Error in toolCallDelta:", error);
+        }
+      });
 
-    // image
-    stream.on("imageFileDone", handleImageFileDone);
+      // events without helpers yet (e.g. requires_action and run.done)
+      stream.on("event", (event) => {
+        try {
+          if (event.event === "thread.run.requires_action") {
+            handleRequiresAction(event);
+          }
+          if (event.event === "thread.run.completed") {
+            handleRunCompleted();
+          }
+        } catch (error) {
+          console.error("Error in event handler:", error);
+        }
+      });
 
-    // code interpreter
-    stream.on("toolCallCreated", toolCallCreated);
-    stream.on("toolCallDelta", toolCallDelta);
+      stream.on("error", (error) => {
+        console.error("Stream error:", error);
+        setInputDisabled(false);
+      });
 
-    // events without helpers yet (e.g. requires_action and run.done)
-    stream.on("event", (event) => {
-      if (event.event === "thread.run.requires_action")
-        handleRequiresAction(event);
-      if (event.event === "thread.run.completed") handleRunCompleted();
-    });
+      stream.on("end", () => {
+        console.log("Stream ended");
+      });
+
+      stream.on("close", () => {
+        console.log("Stream closed");
+      });
+    } catch (error) {
+      console.error("Error setting up handleReadableStream", error);
+    }
   };
 
   /*
@@ -236,17 +303,16 @@ const Chat = ({
         ...lastMessage,
       };
       annotations.forEach((annotation) => {
-        if (annotation.type === 'file_path') {
+        if (annotation.type === "file_path") {
           updatedLastMessage.text = updatedLastMessage.text.replaceAll(
             annotation.text,
             `/api/files/${annotation.file_path.file_id}`
           );
         }
-      })
+      });
       return [...prevMessages.slice(0, -1), updatedLastMessage];
     });
-    
-  }
+  };
 
   return (
     <div className={styles.chatContainer}>
@@ -267,11 +333,7 @@ const Chat = ({
           onChange={(e) => setUserInput(e.target.value)}
           placeholder="Enter your question"
         />
-        <button
-          type="submit"
-          className={styles.button}
-          disabled={inputDisabled}
-        >
+        <button type="submit" className={styles.button} disabled={inputDisabled}>
           Send
         </button>
       </form>
