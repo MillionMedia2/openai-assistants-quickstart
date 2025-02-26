@@ -231,7 +231,7 @@ const Chat = ({
       });
       stream.on("toolCallCreated", (event) => {
         try {
-          toolCallCreated();
+          toolCallCreated(event); // Modified to pass `event`
         } catch (error) {
           console.error("Error in toolCallCreated:", error);
         }
