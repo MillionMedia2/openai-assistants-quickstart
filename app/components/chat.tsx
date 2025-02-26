@@ -2,9 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import styles from "./chat.module.css";
-import { AssistantStream } from "openai/lib/AssistantStream";
 import Markdown from "react-markdown";
-import { RequiredActionFunctionToolCall } from "openai/resources/beta/threads/runs/runs";
 
 type MessageProps = {
   role: "user" | "assistant" | "code";
@@ -49,15 +47,9 @@ const Message = ({ role, text }: MessageProps) => {
   }
 };
 
-type ChatProps = {
-  functionCallHandler?: (
-    toolCall: RequiredActionFunctionToolCall
-  ) => Promise<string>;
-};
+type ChatProps = {};
 
-const Chat = ({
-  functionCallHandler = () => Promise.resolve(""), // default to return empty string
-}: ChatProps) => {
+const Chat = ({}: ChatProps) => {
   const [userInput, setUserInput] = useState("");
   const [messages, setMessages] = useState<MessageProps[]>([
     {
@@ -67,8 +59,6 @@ const Chat = ({
   ]);
   const [inputDisabled, setInputDisabled] = useState(false);
   const [threadId, setThreadId] = useState("");
-  const [lastActivity, setLastActivity] = useState(Date.now()); // Track last stream activity
-  const HEARTBEAT_INTERVAL = 5000; // 5 seconds
 
   // automatically scroll to bottom of chat
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -77,13 +67,6 @@ const Chat = ({
   };
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
-
-  const scrollToTop = () => {
-    window.scrollTo(0, 0);
-  };
-  useEffect(() => {
-    scrollToTop();
   }, [messages]);
 
   // create a new threadID when chat component created
@@ -106,19 +89,18 @@ const Chat = ({
   }, []);
 
   const sendMessage = async (text) => {
+    setInputDisabled(true); // Disable input while sending
     try {
-      const response = await fetch(
-        `/api/assistants/threads/${threadId}/messages`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            content: text,
-          }),
-        }
-      );
+      const response = await fetch(`/api/assistants/threads/${threadId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content: text }),
+      });
+
       if (!response.ok) {
-        // Try to read the error message from the response
-        let errorMessage = `HTTP error! status: ${response.status}`;
+        let errorMessage = `HTTP error! Status: ${response.status}`;
         try {
           const errorText = await response.text();
           errorMessage += ` - ${errorText}`;
@@ -127,33 +109,26 @@ const Chat = ({
         }
         throw new Error(errorMessage);
       }
-      const stream = AssistantStream.fromReadableStream(response.body);
-      handleReadableStream(stream);
-    } catch (error: any) {
-      console.error("Error sending message:", error);
-      setInputDisabled(false);
-    }
-  };
 
-  const submitActionResult = async (runId, toolCallOutputs) => {
-    try {
-      const response = await fetch(
-        `/api/assistants/threads/${threadId}/actions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            runId: runId,
-            toolCallOutputs: toolCallOutputs,
-          }),
-        }
-      );
-      const stream = AssistantStream.fromReadableStream(response.body);
-      handleReadableStream(stream);
+      const data = await response.json();
+      console.log("Response data:", data);
+
+      if (data.content) {
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { role: "assistant", text: data.content },
+        ]);
+      } else {
+        console.warn("No content received in response.");
+      }
+
     } catch (error: any) {
-      console.error("Error submitting action result:", error);
+      console.error("Error processing response:", error);
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { role: "assistant", text: `Error: ${error.message}` },
+      ]);
+    } finally {
       setInputDisabled(false);
     }
   };
@@ -161,168 +136,12 @@ const Chat = ({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!userInput.trim()) return;
+
+    setMessages((prevMessages) => [...prevMessages, { role: "user", text: userInput }]);
+
     sendMessage(userInput);
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { role: "user", text: userInput },
-    ]);
     setUserInput("");
-    setInputDisabled(true);
     scrollToBottom();
-  };
-
-  /* Stream Event Handlers */
-
-  // textCreated - create new assistant message
-  const handleTextCreated = () => {
-    appendMessage("assistant", "");
-    setLastActivity(Date.now());
-  };
-
-  // textDelta - append text to last assistant message
-  const handleTextDelta = (delta) => {
-    if (delta.value != null) {
-      appendToLastMessage(delta.value);
-        setLastActivity(Date.now());
-    };
-    if (delta.annotations != null) {
-      annotateLastMessage(delta.annotations);
-    }
-  };
-
-  // handleRequiresAction - handle function call
-  const handleRequiresAction = async (
-    event: any
-  ) => {
-    const runId = event.data.id;
-    const toolCalls = event.data.required_action.submit_tool_outputs.tool_calls;
-    // loop over tool calls and call function handler
-    const toolCallOutputs = await Promise.all(
-      toolCalls.map(async (toolCall) => {
-        const result = await functionCallHandler(toolCall);
-        return { output: result, tool_call_id: toolCall.id };
-      })
-    );
-    setInputDisabled(true);
-    submitActionResult(runId, toolCallOutputs);
-  };
-
-  // handleRunCompleted - re-enable the input form
-  const handleRunCompleted = () => {
-    setInputDisabled(false);
-  };
-
-   const handleReadableStream = (stream: AssistantStream) => {
-    try {
-      let streamActive = true; // Track if the stream is considered active
-      const resetInactivityTimeout = () => {
-        setLastActivity(Date.now()); // Reset last activity on any event
-      };
-      // Heartbeat Mechanism (Client-Side)
-      const inactivityCheck = () => {
-        if (Date.now() - lastActivity > HEARTBEAT_INTERVAL * 2 && streamActive) { // Check if no activity for 2 intervals
-          console.error("Heartbeat failed: Stream appears to be inactive.");
-          streamActive = false; // Mark stream as inactive
-          setInputDisabled(false); // Re-enable input
-        }
-      };
-      const heartbeatIntervalId = setInterval(inactivityCheck, HEARTBEAT_INTERVAL);
-
-      // messages
-      stream.on("textCreated", (event) => {
-        try {
-          handleTextCreated();
-          resetInactivityTimeout();
-        } catch (error) {
-          console.error("Error in handleTextCreated:", error);
-          streamActive = false;
-        }
-      });
-      stream.on("textDelta", (event) => {
-        try {
-          handleTextDelta(event);
-          resetInactivityTimeout();
-        } catch (error) {
-          console.error("Error in handleTextDelta:", error);
-          streamActive = false;
-        }
-      });
-
-      // events without helpers yet (e.g. requires_action and run.done)
-      stream.on("event", (event) => {
-        try {
-          if (event.event === "thread.run.requires_action") {
-            handleRequiresAction(event);
-          }
-          if (event.event === "thread.run.completed") {
-            handleRunCompleted();
-            clearInterval(heartbeatIntervalId);
-          }
-          resetInactivityTimeout();
-        } catch (error) {
-          console.error("Error in event handler:", error);
-          streamActive = false;
-        }
-      });
-
-      stream.on("error", (error) => {
-        console.error("Stream error:", error);
-        setInputDisabled(false);
-        clearInterval(heartbeatIntervalId); // Clear interval on error
-        streamActive = false;
-      });
-
-      stream.on("end", () => {
-        console.log("Stream ended");
-        clearInterval(heartbeatIntervalId); // Clear interval on end
-      });
-
-    } catch (error) {
-      console.error("Error setting up handleReadableStream", error);
-    }
-  };
-
-  /*
-    =======================
-    === Utility Helpers ===
-    =======================
-  */
-
-  const appendToLastMessage = (text) => {
-    setMessages((prevMessages) => {
-      const lastMessage = prevMessages[prevMessages.length - 1];
-      const updatedLastMessage = {
-        ...lastMessage,
-        text: lastMessage.text + text,
-      };
-      return [...prevMessages.slice(0, -1), updatedLastMessage];
-    });
-  };
-
-  const appendMessage = (role, text) => {
-    setMessages((prevMessages) => [...prevMessages, { role, text }]);
-  };
-
-  const annotateLastMessage = (delta) => {
-    setMessages((prevMessages) => {
-      const lastMessage = prevMessages[prevMessages.length - 1];
-      const updatedLastMessage = {
-        ...lastMessage,
-        text: lastMessage.text + delta.value,
-      };
-      if (delta.annotations) {
-           delta.annotations.forEach((annotation) => {
-        if (annotation.type === 'file_path') {
-          updatedLastMessage.text = updatedLastMessage.text.replaceAll(
-            annotation.text,
-            `/api/files/${annotation.file_path.file_id}`
-          );
-        }
-      })
-      }
-    
-      return [...prevMessages.slice(0, -1), updatedLastMessage];
-    });
   };
 
   return (
