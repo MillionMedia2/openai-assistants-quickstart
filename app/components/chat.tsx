@@ -64,6 +64,8 @@ const Chat = ({
   const [messages, setMessages] = useState([]);
   const [inputDisabled, setInputDisabled] = useState(false);
   const [threadId, setThreadId] = useState("");
+  const [lastActivity, setLastActivity] = useState(Date.now());  // Track last stream activity
+  const HEARTBEAT_INTERVAL = 5000; // 5 seconds
 
   // automatically scroll to bottom of chat
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -117,6 +119,17 @@ const Chat = ({
           }),
         }
       );
+      if (!response.ok) {
+        // Try to read the error message from the response
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorText = await response.text();
+          errorMessage += ` - ${errorText}`;
+        } catch (e) {
+          console.warn("Failed to read error text from response", e);
+        }
+        throw new Error(errorMessage);
+      }
       const stream = AssistantStream.fromReadableStream(response.body);
       handleReadableStream(stream);
     } catch (error: any) {
@@ -166,12 +179,14 @@ const Chat = ({
   // textCreated - create new assistant message
   const handleTextCreated = () => {
     appendMessage("assistant", "");
+    setLastActivity(Date.now());
   };
 
   // textDelta - append text to last assistant message
   const handleTextDelta = (delta) => {
     if (delta.value != null) {
       appendToLastMessage(delta.value);
+        setLastActivity(Date.now());
     };
     if (delta.annotations != null) {
       annotateLastMessage(delta.annotations);
@@ -180,7 +195,8 @@ const Chat = ({
 
   // imageFileDone - show image in chat
   const handleImageFileDone = (image) => {
-    appendToLastMessage(`\n![${image.file_id}](/api/files/${image.file_id})\n`);
+    appendToLastMessage(`\n![${image.file_id}](/api/files/${image.file_path.file_id})\n`);
+    setLastActivity(Date.now());
   }
 
   // handleRequiresAction - handle function call
@@ -207,26 +223,44 @@ const Chat = ({
 
   const handleReadableStream = (stream: AssistantStream) => {
     try {
-      // messages
+      let streamActive = true; // Track if the stream is considered active
+      const resetInactivityTimeout = () => {
+        setLastActivity(Date.now()); // Reset last activity on any event
+      };
+      // Heartbeat Mechanism (Client-Side)
+      const inactivityCheck = () => {
+        if (Date.now() - lastActivity > HEARTBEAT_INTERVAL * 2 && streamActive) { // Check if no activity for 2 intervals
+          console.error("Heartbeat failed: Stream appears to be inactive.");
+          streamActive = false; // Mark stream as inactive
+          setInputDisabled(false); // Re-enable input
+        }
+      };
+      const heartbeatIntervalId = setInterval(inactivityCheck, HEARTBEAT_INTERVAL);
       stream.on("textCreated", (event) => {
         try {
           handleTextCreated();
+            resetInactivityTimeout()
         } catch (error) {
           console.error("Error in handleTextCreated:", error);
+          streamActive = false;
         }
       });
       stream.on("textDelta", (event) => {
         try {
           handleTextDelta(event);
+            resetInactivityTimeout()
         } catch (error) {
           console.error("Error in handleTextDelta:", error);
+          streamActive = false;
         }
       });
       stream.on("imageFileDone", (event) => {
         try {
           handleImageFileDone(event);
+            resetInactivityTimeout()
         } catch (error) {
           console.error("Error in handleImageFileDone:", error);
+          streamActive = false;
         }
       });
 
@@ -238,19 +272,25 @@ const Chat = ({
           }
           if (event.event === "thread.run.completed") {
             handleRunCompleted();
+            clearInterval(heartbeatIntervalId)
           }
+            resetInactivityTimeout()
         } catch (error) {
           console.error("Error in event handler:", error);
+          streamActive = false;
         }
       });
 
       stream.on("error", (error) => {
         console.error("Stream error:", error);
         setInputDisabled(false);
+        clearInterval(heartbeatIntervalId); // Clear interval on error
+        streamActive = false;
       });
 
       stream.on("end", () => {
         console.log("Stream ended");
+        clearInterval(heartbeatIntervalId); // Clear interval on end
       });
 
     } catch (error) {
