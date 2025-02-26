@@ -85,7 +85,20 @@ const Chat = ({
           throw new Error(`Failed to create thread: ${res.status}`);
         }
         const data = await res.json();
-        setThreadId(data.threadId);
+        const newThreadId = data.threadId;
+
+        // Send initial assistant message
+        try {
+          await fetch(`/api/assistants/threads/${newThreadId}/messages`, {
+            method: "POST",
+            body: JSON.stringify({
+              content: "I am an Agent who can talk about medical cannabis, clinics and prescriptions. How can I help you?",
+            }),
+          });
+          setThreadId(newThreadId);
+        } catch (error) {
+          console.error("Error sending initial message:", error);
+        }
       } catch (error: any) {
         console.error("Error creating thread:", error);
       }
@@ -170,19 +183,6 @@ const Chat = ({
     appendToLastMessage(`\n![${image.file_id}](/api/files/${image.file_id})\n`);
   }
 
-  // toolCallCreated - log new tool call
-  const toolCallCreated = (toolCall) => {
-    if (toolCall.type != "code_interpreter") return;
-    appendMessage("code", "");
-  };
-
-  // toolCallDelta - log delta and snapshot for the tool call
-  const toolCallDelta = (delta, snapshot) => {
-    if (delta.type != "code_interpreter") return;
-    if (!delta.code_interpreter.input) return;
-    appendToLastMessage(delta.code_interpreter.input);
-  };
-
   // handleRequiresAction - handle function call
   const handleRequiresAction = async (
     event: AssistantStreamEvent.ThreadRunRequiresAction
@@ -229,20 +229,6 @@ const Chat = ({
           console.error("Error in handleImageFileDone:", error);
         }
       });
-      stream.on("toolCallCreated", (event) => {
-        try {
-          toolCallCreated(event); // Modified to pass `event`
-        } catch (error) {
-          console.error("Error in toolCallCreated:", error);
-        }
-      });
-      stream.on("toolCallDelta", (event) => {
-        try {
-          toolCallDelta(event);
-        } catch (error) {
-          console.error("Error in toolCallDelta:", error);
-        }
-      });
 
       // events without helpers yet (e.g. requires_action and run.done)
       stream.on("event", (event) => {
@@ -267,9 +253,6 @@ const Chat = ({
         console.log("Stream ended");
       });
 
-      stream.on("close", () => {
-        console.log("Stream closed");
-      });
     } catch (error) {
       console.error("Error setting up handleReadableStream", error);
     }
