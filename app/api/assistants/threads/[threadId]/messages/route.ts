@@ -3,7 +3,6 @@ import { openai } from "@/app/openai";
 
 export const runtime = "nodejs";
 
-// Send a new message to a thread
 export async function POST(request: Request, { params: { threadId } }) {
     const { content } = await request.json();
 
