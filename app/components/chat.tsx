@@ -86,6 +86,16 @@ const Chat = ({
     createThread();
   }, []);
 
+    // Add the Plantz Agent message at the start of the conversation
+    useEffect(() => {
+      const plantzAgentMessage = {
+        role: "assistant",
+        text: "I am a Plantz Agent. Please ask me about medical cannabis, including information about clinics or how to get a prescription",
+      };
+      setMessages([plantzAgentMessage]);
+    }, []);
+
+
   const sendMessage = async (text) => {
     const response = await fetch(
       `/api/assistants/threads/${threadId}/messages`,
