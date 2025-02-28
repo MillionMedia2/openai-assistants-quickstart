@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "functions": {
+    "api/assistants/threads/[threadid]/messages/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
