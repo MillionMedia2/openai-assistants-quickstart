@@ -86,15 +86,14 @@ const Chat = ({
     createThread();
   }, []);
 
-    // Add the Plantz Agent message at the start of the conversation
-    useEffect(() => {
-      const plantzAgentMessage = {
-        role: "assistant",
-        text: "I am a Plantz Agent. Please ask me about medical cannabis, including information about clinics or how to get a prescription",
-      };
-      setMessages([plantzAgentMessage]);
-    }, []);
-
+  // Add the Plantz Agent message at the start of the conversation
+  useEffect(() => {
+    const plantzAgentMessage = {
+      role: "assistant",
+      text: "I am a Plantz Agent. Please ask me about medical cannabis, including information about clinics or how to get a prescription",
+    };
+    setMessages([plantzAgentMessage]);
+  }, []);
 
   const sendMessage = async (text) => {
     const response = await fetch(
@@ -152,7 +151,7 @@ const Chat = ({
   const handleTextDelta = (delta) => {
     if (delta.value != null) {
       appendToLastMessage(delta.value);
-    };
+    }
     if (delta.annotations != null) {
       annotateLastMessage(delta.annotations);
     }
@@ -161,7 +160,7 @@ const Chat = ({
   // imageFileDone - show image in chat
   const handleImageFileDone = (image) => {
     appendToLastMessage(`\n![${image.file_id}](/api/files/${image.file_id})\n`);
-  }
+  };
 
   // toolCallCreated - log new tool call
   const toolCallCreated = (toolCall) => {
@@ -202,24 +201,88 @@ const Chat = ({
     let timeoutId: NodeJS.Timeout;
 
     // Define the event handler functions
-    const textCreatedHandler = () => handleTextCreated();
+    const textCreatedHandler = () => {
+      console.log("Event: textCreated");
+      handleTextCreated();
+    };
     const textDeltaHandler = (delta: any) => {
-        handleTextDelta(delta);
-        resetTimeout(); // Reset the timeout on every textDelta event
+      console.log("Event: textDelta", delta);
+      handleTextDelta(delta);
+      resetTimeout(); // Reset the timeout on every textDelta event
     };
-    const imageFileDoneHandler = (image: any) => handleImageFileDone(image);
-    const toolCallCreatedHandler = (toolCall: any) => toolCallCreated(toolCall);
-    const toolCallDeltaHandler = (delta: any, snapshot: any) => toolCallDelta(delta, snapshot);
+    const imageFileDoneHandler = (image: any) => {
+      console.log("Event: imageFileDone", image);
+      handleImageFileDone(image);
+    };
+    const toolCallCreatedHandler = (toolCall: any) => {
+      console.log("Event: toolCallCreated", toolCall);
+      toolCallCreated(toolCall);
+    };
+    const toolCallDeltaHandler = (delta: any, snapshot: any) => {
+      console.log("Event: toolCallDelta", delta, snapshot);
+      toolCallDelta(delta, snapshot);
+    };
     const eventHandler = (event: any) => {
-        if (event.event === "thread.run.requires_action")
-            handleRequiresAction(event);
-        if (event.event === "thread.run.completed") {
-            console.log("Stream completed successfully.");
-            handleRunCompleted();
-            clearTimeout(timeoutId);
-            removeListeners(); // Clear listeners on successful completion
-        }
+      console.log("Event: event", event);
+      if (event.event === "thread.run.requires_action") {
+        handleRequiresAction(event);
+      }
+      if (event.event === "thread.run.completed") {
+        console.log("Event: thread.run.completed - Stream completed successfully.");
+        handleRunCompleted();
+        clearTimeout(timeoutId);
+        removeListeners(); // Clear listeners on successful completion
+      }
     };
+
+    // Function to remove all event listeners
+    const removeListeners = () => {
+      stream.off("textCreated", textCreatedHandler);
+      stream.off("textDelta", textDeltaHandler);
+      stream.off("imageFileDone", imageFileDoneHandler);
+      stream.off("toolCallCreated", toolCallCreatedHandler);
+      stream.off("toolCallDelta", toolCallDeltaHandler);
+      stream.off("event", eventHandler);
+      stream.off("end", endHandler);
+      stream.off("error", errorHandler);
+    };
+
+    // Define end and error handlers
+    const endHandler = () => {
+      console.log("Event: end - Stream ended.");
+      clearTimeout(timeoutId);
+      removeListeners(); // Clear listeners when stream ends
+    };
+
+    const errorHandler = (error: any) => {
+      console.error("Event: error - Stream error:", error);
+      clearTimeout(timeoutId);
+      removeListeners(); // Clear listeners on error
+    };
+
+    stream.on("end", endHandler);
+    stream.on("error", errorHandler);
+
+    // Function to reset the timeout
+    const resetTimeout = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        console.error("Timeout: Final run event not received.");
+        setInputDisabled(false);
+        removeListeners(); // Clear listeners on timeout
+        // Optionally, display an error message to the user
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          {
+            role: "assistant",
+            text: "Error: The assistant did not complete the request. Please try again.",
+          },
+        ]);
+      }, 10000); // 10 seconds timeout (adjust as needed)
+    };
+
+    // Set initial timeout
+    resetTimeout();
 
     // messages
     stream.on("textCreated", textCreatedHandler);
@@ -233,50 +296,8 @@ const Chat = ({
 
     // events without helpers yet (e.g. requires_action and run.done)
     stream.on("event", eventHandler);
+  };
 
-    // Function to remove all event listeners
-    const removeListeners = () => {
-        stream.off("textCreated", textCreatedHandler);
-        stream.off("textDelta", textDeltaHandler);
-        stream.off("imageFileDone", imageFileDoneHandler);
-        stream.off("toolCallCreated", toolCallCreatedHandler);
-        stream.off("toolCallDelta", toolCallDeltaHandler);
-        stream.off("event", eventHandler);
-        stream.off("end", endHandler);
-        stream.off("error", errorHandler);
-    };
-
-    // Define end and error handlers
-    const endHandler = () => {
-        console.log("Stream ended.");
-        clearTimeout(timeoutId);
-        removeListeners(); // Clear listeners when stream ends
-    };
-
-    const errorHandler = (error: any) => {
-        console.error("Stream error:", error);
-        clearTimeout(timeoutId);
-        removeListeners(); // Clear listeners on error
-    };
-
-    stream.on("end", endHandler);
-    stream.on("error", errorHandler);
-
-    // Function to reset the timeout
-    const resetTimeout = () => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-            console.error("Timeout: Final run event not received.");
-            setInputDisabled(false);
-            removeListeners(); // Clear listeners on timeout
-            // Optionally, display an error message to the user
-            // setMessages((prevMessages) => [...prevMessages, { role: 'assistant', text: 'Error: The assistant did not complete the request. Please try again.' }];
-        }, 10000); // 10 seconds timeout (adjust as needed)
-    };
-
-    // Set initial timeout
-    resetTimeout();
-};
   /*
     =======================
     === Utility Helpers ===
@@ -305,17 +326,16 @@ const Chat = ({
         ...lastMessage,
       };
       annotations.forEach((annotation) => {
-        if (annotation.type === 'file_path') {
+        if (annotation.type === "file_path") {
           updatedLastMessage.text = updatedLastMessage.text.replaceAll(
             annotation.text,
             `/api/files/${annotation.file_path.file_id}`
           );
         }
-      })
+      });
       return [...prevMessages.slice(0, -1), updatedLastMessage];
     });
-    
-  }
+  };
 
   return (
     <div className={styles.chatContainer}>
