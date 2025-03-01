@@ -354,7 +354,7 @@ const Chat = ({
           className={styles.input}
           value={userInput}
           onChange={(e) => setUserInput(e.target.value)}
-          placeholder="Enter your question"
+          placeholder="Ask Plantz a question..."
         />
         <button
           type="submit"
