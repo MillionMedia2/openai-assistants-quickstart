@@ -64,6 +64,11 @@
   overflow-wrap: break-word;
 }
 
+.assistantMessage {
+  background-color: #efefef;
+  contain: content; /* Added contain: content to isolate rendering */
+}
+
 .assistantMessage img {
   max-width: 100%;
   margin: 8px 0px 8px 0px;
