@@ -71,7 +71,7 @@
 
 .assistantMessage img {
   max-width: 100%;
-  margin: 8px 0px 8px 0px;
+  margin: 8px 0 8px 0; /* Changed 0px to 0 */
   border-radius: 8px;
 }
 
