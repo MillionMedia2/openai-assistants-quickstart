@@ -304,16 +304,18 @@ const Chat = ({
     =======================
   */
 
-  const appendToLastMessage = (text) => {
-    setMessages((prevMessages) => {
-      const lastMessage = prevMessages[prevMessages.length - 1];
-      const updatedLastMessage = {
-        ...lastMessage,
-        text: lastMessage.text + text,
-      };
-      return [...prevMessages.slice(0, -1), updatedLastMessage];
-    });
-  };
+    const appendToLastMessage = (text) => {
+      setMessages((prevMessages) => {
+        const lastMessage = prevMessages[prevMessages.length - 1];
+        // Remove citations here
+        const textWithoutCitations = text.replace(/【\d+:\d+†source】/g, '');
+        const updatedLastMessage = {
+          ...lastMessage,
+          text: lastMessage.text + textWithoutCitations,
+        };
+        return [...prevMessages.slice(0, -1), updatedLastMessage];
+      });
+    };
 
   const appendMessage = (role, text) => {
     setMessages((prevMessages) => [...prevMessages, { role, text }]);
