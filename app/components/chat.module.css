@@ -66,7 +66,7 @@
 
 .assistantMessage {
   background-color: #efefef;
-  contain: content; /* Added contain: content to isolate rendering */
+  contain: content;
 }
 
 .assistantMessage img {
@@ -79,10 +79,6 @@
   align-self: flex-end;
   color: #fff;
   background-color: #000;
-}
-
-.assistantMessage {
-  background-color: #efefef;
 }
 
 .codeMessage {
