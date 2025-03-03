@@ -5,6 +5,18 @@
   width: 100%;
 }
 
+.chatWrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 800px; /* Adjust as needed */
+  flex-grow: 1; /* Take up remaining vertical space */
+}
+
+.chatInputWrapper {
+  order: 2; /* Ensure input is at the bottom */
+}
+
 .inputForm {
   display: flex;
   width: 100%;
@@ -35,7 +47,8 @@
   color: white;
   border: none;
   font-size: 1em;
-  border-radius: 60px; /* Removed duplicate border-radius property */
+  border-radius: 60px;
+  /* Removed duplicate border-radius property */
 }
 
 .button:disabled {
@@ -66,12 +79,11 @@
 
 .assistantMessage {
   background-color: #efefef;
-  contain: content;
 }
 
 .assistantMessage img {
   max-width: 100%;
-  margin: 8px 0 8px 0; /* Changed 0px to 0 */
+  margin: 8px 0 8px 0;
   border-radius: 8px;
 }
 
