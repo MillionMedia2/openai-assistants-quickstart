@@ -50,6 +50,7 @@
   flex-direction: column;
   order: 2;
   white-space: pre-wrap;
+  overflow-anchor: none;
 }
 
 .userMessage,
