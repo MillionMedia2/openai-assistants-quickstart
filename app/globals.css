@@ -1,4 +1,3 @@
--quickstart/app/globals.css */
 :root {
   --max-width: 1100px;
   --border-radius: 12px;
@@ -16,6 +15,7 @@
 html,
 body {
   max-width: 100vw;
+  overflow-x: hidden;
 }
 
 body {
